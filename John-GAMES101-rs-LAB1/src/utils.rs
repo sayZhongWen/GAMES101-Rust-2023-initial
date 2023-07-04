@@ -1,5 +1,5 @@
 use std::os::raw::c_void;
-use nalgebra::{Matrix4, Vector3};
+use nalgebra::{Matrix3, Matrix4, Vector3};
 use opencv::core::{Mat, MatTraitConst};
 use opencv::imgproc::{COLOR_RGB2BGR, cvt_color};
 
@@ -27,7 +27,7 @@ pub(crate) fn get_model_matrix(rotation_angle: f64) -> Matrix4<f64> {
 
 pub(crate) fn get_projection_matrix(eye_fov: f64, aspect_ratio: f64, z_near: f64, z_far: f64) -> Matrix4<f64> {
     let mut projection: Matrix4<f64> = Matrix4::identity();
-    let r=z_near*(eye_fov/2.0).tan();
+    let r=z_near.abs()*(eye_fov/2.0).tan();
     let l=-r;
     let b=r*aspect_ratio;
     let t=-b;
@@ -44,6 +44,22 @@ pub(crate) fn get_projection_matrix(eye_fov: f64, aspect_ratio: f64, z_near: f64
     0.0,0.0,z_near+z_far,-z_near*z_far,
     0.0,0.0,1.0,0.0);
     projection
+}
+
+pub(crate) fn get_arbitrary_rotation(axis:Vector3<f64>,angle:f64)->Matrix4<f64>{
+    let radian=degrees_to_radians(angle);
+    let x=axis.x;
+    let y=axis.y;
+    let z=axis.z;
+    let mut rotation:Matrix3<f64>=radian.cos()*Matrix3::identity()+(1.0-radian.cos())*Matrix3::new(x*x,x*y,x*z,
+    x*y,y*y,y*z,
+    x*z,y*z,z*z)+radian.sin()*Matrix3::new(0.0,-z,y,
+    z,0.0,-x,
+    -y,x,0.0);
+    Matrix4::new(rotation.m11,rotation.m12,rotation.m13,0.0,
+    rotation.m21,rotation.m22,rotation.m23,0.0,
+    rotation.m31,rotation.m32,rotation.m33,0.0,
+    0.0,0.0,0.0,1.0)
 }
 
 pub(crate) fn frame_buffer2cv_mat(frame_buffer: &Vec<V3d>) -> opencv::core::Mat {

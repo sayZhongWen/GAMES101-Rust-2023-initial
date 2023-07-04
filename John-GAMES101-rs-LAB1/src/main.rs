@@ -3,17 +3,46 @@ mod rasterizer;
 mod utils;
 extern crate opencv;
 use std::env;
-use nalgebra::{Vector3};
+use nalgebra::{Matrix4, Vector3};
 use opencv::core::Vector;
 use opencv::highgui::{imshow, wait_key};
 use opencv::imgcodecs::imwrite;
 use crate::rasterizer::{Primitive, Rasterizer};
 use utils::*;
+use std::io;
 
 fn main() {
     let mut angle = 0.0;
+    let mut angle2=0.0;
     let mut command_line = false;
     let mut filename = "output.png";
+    let mut input=String::new();
+    let mut x:f64=0.0;
+    let mut y:f64=0.0;
+    let mut z:f64=1.0;
+    let mut change=false;
+    input=String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let x:f64=match input.trim().parse(){
+        Ok(x)=>x,
+        Err(_)=>{println!("Fail to read.");
+            return;},
+    };
+    input=String::new();
+    io::stdin().read_line(&mut input).expect("Fail to read.");
+    let y:f64=match input.trim().parse(){
+        Ok(y)=>y,
+        Err(_)=>{println!("Fail to read.");
+            return;},
+    };
+    input=String::new();
+    io::stdin().read_line(&mut input).expect("Fail to read.");
+    let z:f64=match input.trim().parse(){
+        Ok(z)=>z,
+        Err(_)=>{println!("Fail to read.");
+            return;},
+    };
+
     let argv: Vec<String> = env::args().collect();
     if argv.len() >= 2 {
         command_line = true;
@@ -33,11 +62,16 @@ fn main() {
     let pos_id = r.load_position(&pos);
     let ind_id = r.load_indices(&ind);
 
-    let mut k = 0;
+    let mut k:f64 = 0.0;
     let mut frame_count = 0;
     if command_line {
         r.clear(rasterizer::Buffer::Both);
-        r.set_model(get_model_matrix(angle));
+        if !change{
+            r.set_model(get_model_matrix(angle));
+        }else {
+            r.set_model(Matrix4::identity());
+            r.set_arbitrary(get_arbitrary_rotation(Vector3::new(x,y,z),angle2));
+        }
         r.set_view(get_view_matrix(eye_pos));
         r.set_projection(get_projection_matrix(45.0, 1.0, 0.1, 50.0));
         r.draw_triangle(pos_id, ind_id, Primitive::Triangle);
@@ -48,9 +82,15 @@ fn main() {
         imwrite(filename, &image, &Vector::default()).unwrap();
         return;
     }
-    while k != 27 {
+    while k != 27.0 {
         r.clear(rasterizer::Buffer::Both);
-        r.set_model(get_model_matrix(angle));
+        if !change{
+            r.set_model(get_model_matrix(angle));
+        }else {
+            r.set_model(Matrix4::identity());
+            r.set_arbitrary(get_arbitrary_rotation(Vector3::new(x,y,z),angle2));
+        }
+        change=false;
         r.set_view(get_view_matrix(eye_pos));
         r.set_projection(get_projection_matrix(45.0, 1.0, 0.1, 50.0));
         r.draw_triangle(pos_id, ind_id, Primitive::Triangle);
@@ -59,13 +99,16 @@ fn main() {
         let image = frame_buffer2cv_mat(frame_buffer);
         imshow("image", &image).unwrap();
 
-        k = wait_key(80).unwrap();
+        k = wait_key(80).unwrap() as f64;
         println!("frame count: {}", frame_count);
-        if k == 'a' as i32 {
+        if k as i32 == 'a' as i32 {
             angle += 10.0;
-        } else if k == 'd' as i32 {
+        } else if k as i32== 'd' as i32 {
             angle -= 10.0;
-        } 
+        } else if k as i32=='r' as i32{
+            change=true;
+            angle2+=10.0;
+        }
         frame_count += 1;
     }
 }
