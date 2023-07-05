@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use nalgebra::{Matrix4, Vector3, Vector4};
 use crate::triangle::Triangle;
+use nalgebra::{Matrix4, Vector3, Vector4};
 
 #[allow(dead_code)]
 pub enum Buffer {
@@ -114,7 +114,13 @@ impl Rasterizer {
         ColBufId(id)
     }
 
-    pub fn draw(&mut self, pos_buffer: PosBufId, ind_buffer: IndBufId, col_buffer: ColBufId, _typ: Primitive) {
+    pub fn draw(
+        &mut self,
+        pos_buffer: PosBufId,
+        ind_buffer: IndBufId,
+        col_buffer: ColBufId,
+        _typ: Primitive,
+    ) {
         let buf = &self.clone().pos_buf[&pos_buffer.0];
         let ind: &Vec<Vector3<usize>> = &self.clone().ind_buf[&ind_buffer.0];
         let col = &self.clone().col_buf[&col_buffer.0];
@@ -126,11 +132,12 @@ impl Rasterizer {
 
         for i in ind {
             let mut t = Triangle::new();
-            let mut v =
-                vec![mvp * to_vec4(buf[i[0]], Some(1.0)), // homogeneous coordinates
-                     mvp * to_vec4(buf[i[1]], Some(1.0)), 
-                     mvp * to_vec4(buf[i[2]], Some(1.0))];
-    
+            let mut v = vec![
+                mvp * to_vec4(buf[i[0]], Some(1.0)), // homogeneous coordinates
+                mvp * to_vec4(buf[i[1]], Some(1.0)),
+                mvp * to_vec4(buf[i[2]], Some(1.0)),
+            ];
+
             for vec in v.iter_mut() {
                 *vec = *vec / vec.w;
             }
@@ -141,8 +148,6 @@ impl Rasterizer {
             }
             for j in 0..3 {
                 // t.set_vertex(j, Vector3::new(v[j].x, v[j].y, v[j].z));
-                t.set_vertex(j, v[j].xyz());
-                t.set_vertex(j, v[j].xyz());
                 t.set_vertex(j, v[j].xyz());
             }
             let col_x = col[i[0]];
@@ -157,19 +162,22 @@ impl Rasterizer {
     }
 
     pub fn rasterize_triangle(&mut self, t: &Triangle) {
-        let x_min=t.v[0].x.min(t.v[1].x).min(t.v[2].x).floor() as usize;
-        let x_max=t.v[0].x.max(t.v[1].x).max(t.v[2].x).ceil() as usize;
-        let y_min=t.v[0].y.min(t.v[1].y).min(t.v[2].y).floor() as usize;
-        let y_max=t.v[0].y.max(t.v[1].y).max(t.v[2].y).ceil() as usize;
-        for x in x_min..=x_max{
-            for y in y_min..=y_max{
-                if inside_triangle(x as f64+0.5,y as f64+0.5,&t.v){
-                    let (c1,c2,c3)=compute_barycentric2d(x as f64+0.5,y as f64+0.5,&t.v);
-                    let z_interpolated=(c1*t.v[0].z+c2*t.v[1].z+c3*t.v[2].z)/(c1+c2+c3);
-                    let idx=self.get_index(x,y);
-                    if z_interpolated<self.depth_buf[idx]-0.001{
-                        self.depth_buf[idx]=z_interpolated;
-                        self.set_pixel(&Vector3::new(x as f64,y as f64,0.0),&t.get_color());
+        let v = &t.to_vector4();
+        let x_min = v[0].x.min(v[1].x).min(v[2].x) as usize;
+        let x_max = v[0].x.max(v[1].x).max(v[2].x) as usize;
+        let y_min = v[0].y.min(v[1].y).min(v[2].y) as usize;
+        let y_max = v[0].y.max(v[1].y).max(v[2].y) as usize;
+        for x in x_min..=x_max {
+            for y in y_min..=y_max {
+                if inside_triangle(x as f64 + 0.5, y as f64 + 0.5, &t.v) {
+                    let (c1, c2, c3) = compute_barycentric2d(x as f64 + 0.5, y as f64 + 0.5, &t.v);
+                    let z_interpolated =
+                        (c1 * v[0].z / v[0].w + c2 * v[1].z / v[1].w + c3 * v[2].z / v[2].w)
+                            / (c1 / v[0].w + c2 / v[1].w + c3 / v[2].w);
+                    let idx = self.get_index(x, y);
+                    if z_interpolated < self.depth_buf[idx] {
+                        self.depth_buf[idx] = z_interpolated;
+                        self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &t.get_color());
                     }
                 }
             }
@@ -186,25 +194,28 @@ fn to_vec4(v3: Vector3<f64>, w: Option<f64>) -> Vector4<f64> {
 }
 
 fn inside_triangle(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> bool {
-    let p=Vector3::new(x,y,0.0);
-    let ap=p-v[0];
-    let bp=p-v[1];
-    let cp=p-v[2];
-    let ab=v[1]-v[0];
-    let bc=v[2]-v[1];
-    let ca=v[0]-v[2];
-    let res1=ab.cross(&ap);
-    let res2=bc.cross(&bp);
-    let res3=ca.cross(&cp);
-    (res1.z<0.0&&res2.z<0.0&&res3.z<0.0)||(res1.z>0.0&&res2.z>0.0&&res3.z>0.0)
+    let p = Vector3::new(x, y, 0.0);
+    let ap = p - v[0];
+    let bp = p - v[1];
+    let cp = p - v[2];
+    let ab = v[1] - v[0];
+    let bc = v[2] - v[1];
+    let ca = v[0] - v[2];
+    let res1 = ab.cross(&ap);
+    let res2 = bc.cross(&bp);
+    let res3 = ca.cross(&cp);
+    (res1.z < 0.0 && res2.z < 0.0 && res3.z < 0.0) || (res1.z > 0.0 && res2.z > 0.0 && res3.z > 0.0)
 }
 
 fn compute_barycentric2d(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> (f64, f64, f64) {
     let c1 = (x * (v[1].y - v[2].y) + (v[2].x - v[1].x) * y + v[1].x * v[2].y - v[2].x * v[1].y)
-        / (v[0].x * (v[1].y - v[2].y) + (v[2].x - v[1].x) * v[0].y + v[1].x * v[2].y - v[2].x * v[1].y);
+        / (v[0].x * (v[1].y - v[2].y) + (v[2].x - v[1].x) * v[0].y + v[1].x * v[2].y
+            - v[2].x * v[1].y);
     let c2 = (x * (v[2].y - v[0].y) + (v[0].x - v[2].x) * y + v[2].x * v[0].y - v[0].x * v[2].y)
-        / (v[1].x * (v[2].y - v[0].y) + (v[0].x - v[2].x) * v[1].y + v[2].x * v[0].y - v[0].x * v[2].y);
+        / (v[1].x * (v[2].y - v[0].y) + (v[0].x - v[2].x) * v[1].y + v[2].x * v[0].y
+            - v[0].x * v[2].y);
     let c3 = (x * (v[0].y - v[1].y) + (v[1].x - v[0].x) * y + v[0].x * v[1].y - v[1].x * v[0].y)
-        / (v[2].x * (v[0].y - v[1].y) + (v[1].x - v[0].x) * v[2].y + v[0].x * v[1].y - v[1].x * v[0].y);
+        / (v[2].x * (v[0].y - v[1].y) + (v[1].x - v[0].x) * v[2].y + v[0].x * v[1].y
+            - v[1].x * v[0].y);
     (c1, c2, c3)
 }
