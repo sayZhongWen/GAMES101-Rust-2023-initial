@@ -8,12 +8,10 @@ pub fn degrees_to_radians(a: f64) -> f64 {
 }
 
 pub(crate) fn get_view_matrix(eye_pos: Vector3<f64>) -> Matrix4<f64> {
-    let mut view: Matrix4<f64> = Matrix4::identity();
-    view = view
-        * Matrix4::new(
-            1.0, 0.0, 0.0, -eye_pos.x, 0.0, 1.0, 0.0, -eye_pos.y, 0.0, 0.0, 1.0, -eye_pos.z, 0.0,
-            0.0, 0.0, 1.0,
-        );
+    let view = Matrix4::new(
+        1.0, 0.0, 0.0, -eye_pos.x, 0.0, 1.0, 0.0, -eye_pos.y, 0.0, 0.0, 1.0, -eye_pos.z, 0.0, 0.0,
+        0.0, 1.0,
+    );
     view
 }
 
@@ -46,68 +44,62 @@ pub(crate) fn get_projection_matrix(
     z_near: f64,
     z_far: f64,
 ) -> Matrix4<f64> {
-    let mut projection = Matrix4::identity();
     let b = z_near.abs() * (eye_fov / 2.0).tan();
     let t = -b;
     let r = t * aspect_ratio;
     let l = -r;
-    projection = projection
-        * Matrix4::new(
-            2.0 / (r - l),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            2.0 / (t - b),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            2.0 / (z_far - z_near),
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        );
-    projection = projection
-        * Matrix4::new(
-            1.0,
-            0.0,
-            0.0,
-            -(r + l) / 2.0,
-            0.0,
-            1.0,
-            0.0,
-            -(t + b) / 2.0,
-            0.0,
-            0.0,
-            1.0,
-            -(z_far + z_near) / 2.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        );
-    projection = projection
-        * Matrix4::new(
-            z_near,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            z_near,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            z_near + z_far,
-            -z_near * z_far,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-        );
+    let projection = Matrix4::new(
+        2.0 / (r - l),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0 / (t - b),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0 / (z_near - z_far),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ) * Matrix4::new(
+        1.0,
+        0.0,
+        0.0,
+        -(r + l) / 2.0,
+        0.0,
+        1.0,
+        0.0,
+        -(t + b) / 2.0,
+        0.0,
+        0.0,
+        1.0,
+        -(z_far + z_near) / 2.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ) *Matrix4::new(
+        z_near,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        z_near,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        z_near + z_far,
+        -z_near * z_far,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+    );
     projection
 }
 
