@@ -157,17 +157,17 @@ impl Rasterizer {
     }
 
     pub fn rasterize_triangle(&mut self, t: &Triangle) {
-        let x_min=t.v[0].x.min(t.v[1].x).min(t.v[2].x) as usize;
-        let x_max=t.v[0].x.max(t.v[1].x).max(t.v[2].x) as usize;
-        let y_min=t.v[0].y.min(t.v[1].y).min(t.v[2].y) as usize;
-        let y_max=t.v[0].y.max(t.v[1].y).max(t.v[2].y) as usize;
+        let x_min=t.v[0].x.min(t.v[1].x).min(t.v[2].x).floor() as usize;
+        let x_max=t.v[0].x.max(t.v[1].x).max(t.v[2].x).ceil() as usize;
+        let y_min=t.v[0].y.min(t.v[1].y).min(t.v[2].y).floor() as usize;
+        let y_max=t.v[0].y.max(t.v[1].y).max(t.v[2].y).ceil() as usize;
         for x in x_min..=x_max{
             for y in y_min..=y_max{
                 if inside_triangle(x as f64+0.5,y as f64+0.5,&t.v){
                     let (c1,c2,c3)=compute_barycentric2d(x as f64+0.5,y as f64+0.5,&t.v);
                     let z_interpolated=(c1*t.v[0].z+c2*t.v[1].z+c3*t.v[2].z)/(c1+c2+c3);
                     let idx=self.get_index(x,y);
-                    if z_interpolated<self.depth_buf[idx]{
+                    if z_interpolated<self.depth_buf[idx]-0.001{
                         self.depth_buf[idx]=z_interpolated;
                         self.set_pixel(&Vector3::new(x as f64,y as f64,0.0),&t.get_color());
                     }
