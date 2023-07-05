@@ -157,8 +157,23 @@ impl Rasterizer {
     }
 
     pub fn rasterize_triangle(&mut self, t: &Triangle) {
-        /*  implement your code here  */
-        
+        let x_min=t.v[0].x.min(t.v[1].x).min(t.v[2].x) as usize;
+        let x_max=t.v[0].x.max(t.v[1].x).max(t.v[2].x) as usize;
+        let y_min=t.v[0].y.min(t.v[1].y).min(t.v[2].y) as usize;
+        let y_max=t.v[0].y.max(t.v[1].y).max(t.v[2].y) as usize;
+        for x in x_min..=x_max{
+            for y in y_min..=y_max{
+                if inside_triangle(x as f64+0.5,y as f64+0.5,&t.v){
+                    let (c1,c2,c3)=compute_barycentric2d(x as f64+0.5,y as f64+0.5,&t.v);
+                    let z_interpolated=(c1*t.v[0].z+c2*t.v[1].z+c3*t.v[2].z)/(c1+c2+c3);
+                    let idx=self.get_index(x,y);
+                    if z_interpolated<self.depth_buf[idx]{
+                        self.depth_buf[idx]=z_interpolated;
+                        self.set_pixel(&Vector3::new(x as f64,y as f64,0.0),&t.get_color());
+                    }
+                }
+            }
+        }
     }
 
     pub fn frame_buffer(&self) -> &Vec<Vector3<f64>> {
@@ -171,9 +186,17 @@ fn to_vec4(v3: Vector3<f64>, w: Option<f64>) -> Vector4<f64> {
 }
 
 fn inside_triangle(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> bool {
-    /*  implement your code here  */
-
-    false
+    let p=Vector3::new(x,y,0.0);
+    let ap=p-v[0];
+    let bp=p-v[1];
+    let cp=p-v[2];
+    let ab=v[1]-v[0];
+    let bc=v[2]-v[1];
+    let ca=v[0]-v[2];
+    let res1=ab.cross(&ap);
+    let res2=bc.cross(&bp);
+    let res3=ca.cross(&cp);
+    (res1.z<0.0&&res2.z<0.0&&res3.z<0.0)||(res1.z>0.0&&res2.z>0.0&&res3.z>0.0)
 }
 
 fn compute_barycentric2d(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> (f64, f64, f64) {

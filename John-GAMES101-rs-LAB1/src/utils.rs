@@ -18,7 +18,7 @@ pub(crate) fn get_view_matrix(eye_pos: V3d) -> Matrix4<f64> {
 
 pub(crate) fn get_model_matrix(rotation_angle: f64) -> Matrix4<f64> {
     let a=degrees_to_radians(rotation_angle);
-    let mut model: Matrix4<f64> = Matrix4::new(a.cos(),-a.sin(),0.0,0.0,
+    let model: Matrix4<f64> = Matrix4::new(a.cos(),-a.sin(),0.0,0.0,
                                                a.sin(),a.cos(),0.0,0.0,
     0.0,0.0,1.0,0.0,
     0.0,0.0,0.0,1.0);
@@ -27,10 +27,10 @@ pub(crate) fn get_model_matrix(rotation_angle: f64) -> Matrix4<f64> {
 
 pub(crate) fn get_projection_matrix(eye_fov: f64, aspect_ratio: f64, z_near: f64, z_far: f64) -> Matrix4<f64> {
     let mut projection: Matrix4<f64> = Matrix4::identity();
-    let r=z_near.abs()*(eye_fov/2.0).tan();
-    let l=-r;
-    let b=r*aspect_ratio;
+    let b=z_near.abs()*(eye_fov/2.0).tan();
     let t=-b;
+    let r=t*aspect_ratio;
+    let l=-r;
     projection= projection*Matrix4::new(2.0/(r-l),0.0,0.0,0.0,
     0.0,2.0/(t-b),0.0,0.0,
                                         0.0, 0.0,0.0,2.0/(z_far-z_near),
@@ -51,7 +51,7 @@ pub(crate) fn get_arbitrary_rotation(axis:Vector3<f64>,angle:f64)->Matrix4<f64>{
     let x=axis.x;
     let y=axis.y;
     let z=axis.z;
-    let mut rotation:Matrix3<f64>=radian.cos()*Matrix3::identity()+(1.0-radian.cos())*Matrix3::new(x*x,x*y,x*z,
+    let rotation:Matrix3<f64>=radian.cos()*Matrix3::identity()+(1.0-radian.cos())*Matrix3::new(x*x,x*y,x*z,
     x*y,y*y,y*z,
     x*z,y*z,z*z)+radian.sin()*Matrix3::new(0.0,-z,y,
     z,0.0,-x,
