@@ -82,7 +82,7 @@ pub(crate) fn get_projection_matrix(
         0.0,
         0.0,
         1.0,
-    ) *Matrix4::new(
+    ) * Matrix4::new(
         z_near,
         0.0,
         0.0,

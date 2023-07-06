@@ -27,9 +27,9 @@ pub struct Rasterizer {
 
     frame_buf: Vec<Vector3<f64>>,
     depth_buf: Vec<f64>,
-    /*  You may need to uncomment here to implement the MSAA method  */
-    // frame_sample: Vec<Vector3<f64>>,
-    // depth_sample: Vec<f64>,
+    //MSAA
+    frame_sample: Vec<Vector3<f64>>,
+    depth_sample: Vec<f64>,
     width: u64,
     height: u64,
     next_id: usize,
@@ -51,6 +51,9 @@ impl Rasterizer {
         r.height = h;
         r.frame_buf.resize((w * h) as usize, Vector3::zeros());
         r.depth_buf.resize((w * h) as usize, 0.0);
+        r.frame_sample
+            .resize((w * h * 4) as usize, Vector3::zeros());
+        r.depth_sample.resize((w * h * 4) as usize, 0.0);
         r
     }
 
@@ -58,22 +61,44 @@ impl Rasterizer {
         ((self.height - 1 - y as u64) * self.width + x as u64) as usize
     }
 
+    fn get_super_index(&self, x: usize, y: usize, x_offset: usize, y_offset: usize) -> usize {
+        ((self.height * 2 - 1 - y as u64 * 2 - y_offset as u64) * self.width * 2
+            + x as u64 * 2
+            + x_offset as u64) as usize
+    }
+
     fn set_pixel(&mut self, point: &Vector3<f64>, color: &Vector3<f64>) {
         let ind = (self.height as f64 - 1.0 - point.y) * self.width as f64 + point.x;
         self.frame_buf[ind as usize] = *color;
+    }
+
+    fn set_super_pixel(
+        &mut self,
+        x: usize,
+        y: usize,
+        x_offset: usize,
+        y_offset: usize,
+        color: &Vector3<f64>,
+    ) {
+        let idx = self.get_super_index(x, y, x_offset, y_offset);
+        self.frame_sample[idx] = *color;
     }
 
     pub fn clear(&mut self, buff: Buffer) {
         match buff {
             Buffer::Color => {
                 self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
+                self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
             }
             Buffer::Depth => {
                 self.depth_buf.fill(f64::MAX);
+                self.depth_sample.fill(f64::MAX);
             }
             Buffer::Both => {
                 self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
                 self.depth_buf.fill(f64::MAX);
+                self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
+                self.depth_sample.fill(f64::MAX);
             }
         }
     }
@@ -169,16 +194,38 @@ impl Rasterizer {
         let y_max = v[0].y.max(v[1].y).max(v[2].y) as usize;
         for x in x_min..=x_max {
             for y in y_min..=y_max {
-                if inside_triangle(x as f64 + 0.5, y as f64 + 0.5, &t.v) {
-                    let (c1, c2, c3) = compute_barycentric2d(x as f64 + 0.5, y as f64 + 0.5, &t.v);
-                    let z_interpolated =
-                        (c1 * v[0].z / v[0].w + c2 * v[1].z / v[1].w + c3 * v[2].z / v[2].w)
-                            / (c1 / v[0].w + c2 / v[1].w + c3 / v[2].w);
-                    let idx = self.get_index(x, y);
-                    if z_interpolated < self.depth_buf[idx] {
-                        self.depth_buf[idx] = z_interpolated;
-                        self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &t.get_color());
+                let mut flag = false;
+                for x_offset in 0..2 {
+                    for y_offset in 0..2 {
+                        let x_sample = x as f64 + 0.25 + x_offset as f64 * 0.5;
+                        let y_sample = y as f64 + 0.25 + x_offset as f64 * 0.5;
+                        if inside_triangle(x_sample, y_sample, &t.v) {
+                            let (c1, c2, c3) = compute_barycentric2d(x_sample, y_sample, &t.v);
+                            let z_interpolated = (c1 * v[0].z / v[0].w
+                                + c2 * v[1].z / v[1].w
+                                + c3 * v[2].z / v[2].w)
+                                / (c1 / v[0].w + c2 / v[1].w + c3 / v[2].w);
+                            let idx = self.get_super_index(x, y, x_offset, y_offset);
+                            if z_interpolated < self.depth_sample[idx] {
+                                flag = true;
+                                self.depth_sample[idx] = z_interpolated;
+                                self.set_super_pixel(x, y, x_offset, y_offset, &t.get_color());
+                            }
+                        }
                     }
+                }
+                if flag {
+                    let mut color = Vector3::zeros();
+                    for x_offset in 0..2 {
+                        for y_offset in 0..2 {
+                            color +=
+                                self.frame_sample[self.get_super_index(x, y, x_offset, y_offset)];
+                        }
+                    }
+                    color[0] /= 4.0;
+                    color[1] /= 4.0;
+                    color[2] /= 4.0;
+                    self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &color)
                 }
             }
         }
