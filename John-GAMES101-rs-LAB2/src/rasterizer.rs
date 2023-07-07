@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::triangle::Triangle;
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 
-
 #[allow(dead_code)]
 pub enum Buffer {
     Color,
@@ -215,61 +214,70 @@ impl Rasterizer {
         &self.frame_buf
     }
 
-    pub fn get_luminance(&self)->Vec<f64>{
-        let mut res=Vec::with_capacity((self.width*self.height)as usize);
-        for x in 0..self.width{
-            for y in 0..self.height{
+    pub fn get_luminance(&self) -> Vec<f64> {
+        let mut res = Vec::with_capacity((self.width * self.height) as usize);
+        for x in 0..self.width {
+            for y in 0..self.height {
                 res.push(0.0);
             }
         }
-        for x in 0..self.width{
-            for y in 0..self.height{
+        for x in 0..self.width {
+            for y in 0..self.height {
                 res.push(0.0);
-                let idx=self.get_index(x as usize,y as usize);
-                res[idx]=luminance(&self.frame_buf[idx]);
+                let idx = self.get_index(x as usize, y as usize);
+                res[idx] = luminance(&self.frame_buf[idx]);
             }
         }
         res
     }
 
-    pub fn fxaa(&mut self){
-        const CONTRAST_THRESHOLD:f64=0.0833;
-        const RELATIVE_THRESHOLD:f64=0.125;
-        let luma:Vec<f64>=self.get_luminance();
-        for x in 1..self.width-1{
-            for y in 1..self.height-1{
-                let n =luma[self.get_index(x as usize, y as usize+1)];
-                let w =luma[self.get_index(x as usize-1, y as usize)];
-                let e =luma[self.get_index(x as usize+1, y as usize)];
-                let s =luma[self.get_index(x as usize, y as usize-1)];
-                let m =luma[self.get_index(x as usize, y as usize)];
-                let nw =luma[self.get_index(x as usize-1, y as usize+1)];
-                let ne =luma[self.get_index(x as usize+1, y as usize+1)];
-                let sw =luma[self.get_index(x as usize-1, y as usize-1)];
-                let se =luma[self.get_index(x as usize+1, y as usize-1)];
-                let max_luma= n.max(e).max(w).max(s).max(m);
-                let min_luma= n.min(e).min(w).min(s).min(m);
-                let contrast=max_luma-min_luma;//根据色彩的亮度对比度判断是否要模糊边界处理
-                if contrast>=CONTRAST_THRESHOLD.max(RELATIVE_THRESHOLD*max_luma){
-                    let mut filter=(2.0*(n + e + s + w)+ ne + nw + se + sw)/12.0;
-                    filter=(filter- m).abs();
-                    filter=saturate(filter/contrast);
-                    let mut pixel_blend=smoothstep(0.0,1.0,filter);
-                    pixel_blend=pixel_blend*pixel_blend;
-                    let vertical=(n + s -2.0* m).abs()*2.0+(ne + se -2.0* e).abs()+(nw + sw -2.0* w).abs();
-                    let horizontal=(e + w -2.0* m).abs()*2.0+(ne + nw -2.0* n).abs()+(se + sw -2.0* s).abs();
-                    let is_horizontal=vertical>horizontal;
-                    let mut pixel_step=if is_horizontal{Vector2::new(0.0,1.0)}else{
-                        Vector2::new(1.0,0.0)
+    pub fn fxaa(&mut self) {
+        const CONTRAST_THRESHOLD: f64 = 0.0833;
+        const RELATIVE_THRESHOLD: f64 = 0.125;
+        let luma: Vec<f64> = self.get_luminance();
+        for x in 1..self.width - 1 {
+            for y in 1..self.height - 1 {
+                let n = luma[self.get_index(x as usize, y as usize + 1)];
+                let w = luma[self.get_index(x as usize - 1, y as usize)];
+                let e = luma[self.get_index(x as usize + 1, y as usize)];
+                let s = luma[self.get_index(x as usize, y as usize - 1)];
+                let m = luma[self.get_index(x as usize, y as usize)];
+                let nw = luma[self.get_index(x as usize - 1, y as usize + 1)];
+                let ne = luma[self.get_index(x as usize + 1, y as usize + 1)];
+                let sw = luma[self.get_index(x as usize - 1, y as usize - 1)];
+                let se = luma[self.get_index(x as usize + 1, y as usize - 1)];
+                let max_luma = n.max(e).max(w).max(s).max(m);
+                let min_luma = n.min(e).min(w).min(s).min(m);
+                let contrast = max_luma - min_luma; //根据色彩的亮度对比度判断是否要模糊边界处理
+                if contrast >= CONTRAST_THRESHOLD.max(RELATIVE_THRESHOLD * max_luma) {
+                    let mut filter = (2.0 * (n + e + s + w) + ne + nw + se + sw) / 12.0;
+                    filter = (filter - m).abs();
+                    filter = saturate(filter / contrast);
+                    let mut pixel_blend = smoothstep(0.0, 1.0, filter);
+                    pixel_blend = pixel_blend * pixel_blend;
+                    let vertical = (n + s - 2.0 * m).abs() * 2.0
+                        + (ne + se - 2.0 * e).abs()
+                        + (nw + sw - 2.0 * w).abs();
+                    let horizontal = (e + w - 2.0 * m).abs() * 2.0
+                        + (ne + nw - 2.0 * n).abs()
+                        + (se + sw - 2.0 * s).abs();
+                    let is_horizontal = vertical > horizontal;
+                    let mut pixel_step = if is_horizontal {
+                        Vector2::new(0.0, 1.0)
+                    } else {
+                        Vector2::new(1.0, 0.0)
                     };
-                    let positive=(if is_horizontal{n}else{e}).abs();
-                    let negative=(if is_horizontal{s}else{w}).abs();
-                    if positive<negative{
-                        pixel_step=-pixel_step;
+                    let positive = (if is_horizontal { n } else { e }).abs();
+                    let negative = (if is_horizontal { s } else { w }).abs();
+                    if positive < negative {
+                        pixel_step = -pixel_step;
                     }
-                    let direction=Vector2::new(x as f64,y as f64)+pixel_step;//色彩混合方向
-                    let final_color=(self.frame_buf[self.get_index(x as usize,y as usize)]+self.frame_buf[self.get_index(direction.x as usize,direction.y as usize)])/2.0;
-                    self.set_pixel(&Vector3::new(x as f64,y as f64,0.0),&final_color);
+                    let direction = Vector2::new(x as f64, y as f64) + pixel_step; //色彩混合方向
+                    let final_color = (self.frame_buf[self.get_index(x as usize, y as usize)]
+                        + self.frame_buf
+                            [self.get_index(direction.x as usize, direction.y as usize)])
+                        / 2.0;
+                    self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &final_color);
                 }
             }
         }
@@ -306,15 +314,19 @@ fn compute_barycentric2d(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> (f64, f64, f6
             - v[1].x * v[0].y);
     (c1, c2, c3)
 }
-fn luminance(color:&Vector3<f64>)->f64{
-    0.213*color[0]+0.715*color[1]+0.072*color[2]
+fn luminance(color: &Vector3<f64>) -> f64 {
+    0.213 * color[0] + 0.715 * color[1] + 0.072 * color[2]
 }
-pub fn saturate(x:f64)->f64{
-    if x<0.0{return 0.0;}
-    if x>1.0{return 1.0;}
+pub fn saturate(x: f64) -> f64 {
+    if x < 0.0 {
+        return 0.0;
+    }
+    if x > 1.0 {
+        return 1.0;
+    }
     x
 }
-pub fn smoothstep(a:f64,b:f64,x:f64)->f64{
-    let t=saturate((x-a)/(b-a));
-    t*t*(3.0-(2.0*t))
+pub fn smoothstep(a: f64, b: f64, x: f64) -> f64 {
+    let t = saturate((x - a) / (b - a));
+    t * t * (3.0 - (2.0 * t))
 }
