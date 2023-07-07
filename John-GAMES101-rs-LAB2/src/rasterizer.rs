@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::triangle::Triangle;
-use nalgebra::{Matrix4, Vector3, Vector4};
+use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
+
 
 #[allow(dead_code)]
 pub enum Buffer {
@@ -28,8 +29,8 @@ pub struct Rasterizer {
     frame_buf: Vec<Vector3<f64>>,
     depth_buf: Vec<f64>,
     //MSAA
-    frame_sample: Vec<Vector3<f64>>,
-    depth_sample: Vec<f64>,
+    // frame_sample: Vec<Vector3<f64>>,
+    // depth_sample: Vec<f64>,
     width: u64,
     height: u64,
     next_id: usize,
@@ -51,9 +52,9 @@ impl Rasterizer {
         r.height = h;
         r.frame_buf.resize((w * h) as usize, Vector3::zeros());
         r.depth_buf.resize((w * h) as usize, 0.0);
-        r.frame_sample
-            .resize((w * h * 4) as usize, Vector3::zeros());
-        r.depth_sample.resize((w * h * 4) as usize, 0.0);
+        // r.frame_sample
+        //     .resize((w * h * 4) as usize, Vector3::zeros());
+        // r.depth_sample.resize((w * h * 4) as usize, 0.0);
         r
     }
 
@@ -72,33 +73,33 @@ impl Rasterizer {
         self.frame_buf[ind as usize] = *color;
     }
 
-    fn set_super_pixel(
-        &mut self,
-        x: usize,
-        y: usize,
-        x_offset: usize,
-        y_offset: usize,
-        color: &Vector3<f64>,
-    ) {
-        let idx = self.get_super_index(x, y, x_offset, y_offset);
-        self.frame_sample[idx] = *color;
-    }
+    // fn set_super_pixel(
+    //     &mut self,
+    //     x: usize,
+    //     y: usize,
+    //     x_offset: usize,
+    //     y_offset: usize,
+    //     color: &Vector3<f64>,
+    // ) {
+    //     let idx = self.get_super_index(x, y, x_offset, y_offset);
+    //     self.frame_sample[idx] = *color;
+    // }
 
     pub fn clear(&mut self, buff: Buffer) {
         match buff {
             Buffer::Color => {
                 self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
-                self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
+                // self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
             }
             Buffer::Depth => {
                 self.depth_buf.fill(f64::MAX);
-                self.depth_sample.fill(f64::MAX);
+                // self.depth_sample.fill(f64::MAX);
             }
             Buffer::Both => {
                 self.frame_buf.fill(Vector3::new(0.0, 0.0, 0.0));
                 self.depth_buf.fill(f64::MAX);
-                self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
-                self.depth_sample.fill(f64::MAX);
+                // self.frame_sample.fill(Vector3::new(0.0, 0.0, 0.0));
+                // self.depth_sample.fill(f64::MAX);
             }
         }
     }
@@ -194,45 +195,84 @@ impl Rasterizer {
         let y_max = v[0].y.max(v[1].y).max(v[2].y) as usize;
         for x in x_min..=x_max {
             for y in y_min..=y_max {
-                let mut flag = false;
-                for x_offset in 0..2 {
-                    for y_offset in 0..2 {
-                        let x_sample = x as f64 + 0.25 + x_offset as f64 * 0.5;
-                        let y_sample = y as f64 + 0.25 + x_offset as f64 * 0.5;
-                        if inside_triangle(x_sample, y_sample, &t.v) {
-                            let (c1, c2, c3) = compute_barycentric2d(x_sample, y_sample, &t.v);
-                            let z_interpolated = (c1 * v[0].z / v[0].w
-                                + c2 * v[1].z / v[1].w
-                                + c3 * v[2].z / v[2].w)
-                                / (c1 / v[0].w + c2 / v[1].w + c3 / v[2].w);
-                            let idx = self.get_super_index(x, y, x_offset, y_offset);
-                            if z_interpolated < self.depth_sample[idx] {
-                                flag = true;
-                                self.depth_sample[idx] = z_interpolated;
-                                self.set_super_pixel(x, y, x_offset, y_offset, &t.get_color());
-                            }
-                        }
+                if inside_triangle(x as f64 + 0.5, y as f64 + 0.5, &t.v) {
+                    let (c1, c2, c3) = compute_barycentric2d(x as f64 + 0.5, y as f64 + 0.5, &t.v);
+                    let z_interpolated =
+                        (c1 * v[0].z / v[0].w + c2 * v[1].z / v[1].w + c3 * v[2].z / v[2].w)
+                            / (c1 / v[0].w + c2 / v[1].w + c3 / v[2].w);
+                    let idx = self.get_index(x, y);
+                    if z_interpolated < self.depth_buf[idx] {
+                        self.depth_buf[idx] = z_interpolated;
+                        self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &t.get_color());
                     }
-                }
-                if flag {
-                    let mut color = Vector3::zeros();
-                    for x_offset in 0..2 {
-                        for y_offset in 0..2 {
-                            color +=
-                                self.frame_sample[self.get_super_index(x, y, x_offset, y_offset)];
-                        }
-                    }
-                    color[0] /= 4.0;
-                    color[1] /= 4.0;
-                    color[2] /= 4.0;
-                    self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &color)
                 }
             }
         }
+        self.fxaa();
     }
 
     pub fn frame_buffer(&self) -> &Vec<Vector3<f64>> {
         &self.frame_buf
+    }
+
+    pub fn get_luminance(&self)->Vec<f64>{
+        let mut res=Vec::with_capacity((self.width*self.height)as usize);
+        for x in 0..self.width{
+            for y in 0..self.height{
+                res.push(0.0);
+            }
+        }
+        for x in 0..self.width{
+            for y in 0..self.height{
+                res.push(0.0);
+                let idx=self.get_index(x as usize,y as usize);
+                res[idx]=luminance(&self.frame_buf[idx]);
+            }
+        }
+        res
+    }
+
+    pub fn fxaa(&mut self){
+        const CONTRAST_THRESHOLD:f64=0.0833;
+        const RELATIVE_THRESHOLD:f64=0.125;
+        let luma:Vec<f64>=self.get_luminance();
+        for x in 1..self.width-1{
+            for y in 1..self.height-1{
+                let n =luma[self.get_index(x as usize, y as usize+1)];
+                let w =luma[self.get_index(x as usize-1, y as usize)];
+                let e =luma[self.get_index(x as usize+1, y as usize)];
+                let s =luma[self.get_index(x as usize, y as usize-1)];
+                let m =luma[self.get_index(x as usize, y as usize)];
+                let nw =luma[self.get_index(x as usize-1, y as usize+1)];
+                let ne =luma[self.get_index(x as usize+1, y as usize+1)];
+                let sw =luma[self.get_index(x as usize-1, y as usize-1)];
+                let se =luma[self.get_index(x as usize+1, y as usize-1)];
+                let max_luma= n.max(e).max(w).max(s).max(m);
+                let min_luma= n.min(e).min(w).min(s).min(m);
+                let contrast=max_luma-min_luma;//根据色彩的亮度对比度判断是否要模糊边界处理
+                if contrast>=CONTRAST_THRESHOLD.max(RELATIVE_THRESHOLD*max_luma){
+                    let mut filter=(2.0*(n + e + s + w)+ ne + nw + se + sw)/12.0;
+                    filter=(filter- m).abs();
+                    filter=saturate(filter/contrast);
+                    let mut pixel_blend=smoothstep(0.0,1.0,filter);
+                    pixel_blend=pixel_blend*pixel_blend;
+                    let vertical=(n + s -2.0* m).abs()*2.0+(ne + se -2.0* e).abs()+(nw + sw -2.0* w).abs();
+                    let horizontal=(e + w -2.0* m).abs()*2.0+(ne + nw -2.0* n).abs()+(se + sw -2.0* s).abs();
+                    let is_horizontal=vertical>horizontal;
+                    let mut pixel_step=if is_horizontal{Vector2::new(0.0,1.0)}else{
+                        Vector2::new(1.0,0.0)
+                    };
+                    let positive=(if is_horizontal{n}else{e}).abs();
+                    let negative=(if is_horizontal{s}else{w}).abs();
+                    if positive<negative{
+                        pixel_step=-pixel_step;
+                    }
+                    let direction=Vector2::new(x as f64,y as f64)+pixel_step;//色彩混合方向
+                    let final_color=(self.frame_buf[self.get_index(x as usize,y as usize)]+self.frame_buf[self.get_index(direction.x as usize,direction.y as usize)])/2.0;
+                    self.set_pixel(&Vector3::new(x as f64,y as f64,0.0),&final_color);
+                }
+            }
+        }
     }
 }
 
@@ -265,4 +305,16 @@ fn compute_barycentric2d(x: f64, y: f64, v: &[Vector3<f64>; 3]) -> (f64, f64, f6
         / (v[2].x * (v[0].y - v[1].y) + (v[1].x - v[0].x) * v[2].y + v[0].x * v[1].y
             - v[1].x * v[0].y);
     (c1, c2, c3)
+}
+fn luminance(color:&Vector3<f64>)->f64{
+    0.213*color[0]+0.715*color[1]+0.072*color[2]
+}
+pub fn saturate(x:f64)->f64{
+    if x<0.0{return 0.0;}
+    if x>1.0{return 1.0;}
+    x
+}
+pub fn smoothstep(a:f64,b:f64,x:f64)->f64{
+    let t=saturate((x-a)/(b-a));
+    t*t*(3.0-(2.0*t))
 }
