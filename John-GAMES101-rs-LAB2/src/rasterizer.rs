@@ -276,7 +276,7 @@ impl Rasterizer {
                     let final_color = (self.frame_buf[self.get_index(x as usize, y as usize)]
                         + self.frame_buf
                             [self.get_index(direction.x as usize, direction.y as usize)])
-                        / 2.0;
+                        / 2.0; //为了让效果更明显一点（并且这张图并不复杂）我没有选择加权
                     self.set_pixel(&Vector3::new(x as f64, y as f64, 0.0), &final_color);
                 }
             }
